@@ -11,28 +11,38 @@ import cn.keking.utils.WebUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fr.opensagres.xdocreport.core.io.IOUtils;
 import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.io.FilenameUtils;
 import org.apache.http.client.HttpClient;
 import org.apache.http.impl.client.DefaultRedirectStrategy;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.client.RequestCallback;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.mvc.method.annotation.MvcUriComponentsBuilder;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +71,66 @@ public class OnlinePreviewController {
         this.fileHandlerService = fileHandlerService;
         this.cacheService = cacheService;
         this.otherFilePreview = otherFilePreview;
+    }
+
+    /**
+     * @param path  base64加密的本地绝对路径
+     * @param model
+     * @param req
+     * @return
+     */
+    @GetMapping(value = "/localPreview")
+    public String localPreview(@RequestParam String path, Model model, HttpServletRequest req) {
+        String encPath = FilenameUtils.getBaseName(path);
+        String localPath = new String(java.util.Base64.getUrlDecoder().decode(encPath), StandardCharsets.UTF_8);
+        String[] pathArray = localPath.split(";");
+        String fileName;
+        String baseUri = MvcUriComponentsBuilder.fromController(OnlinePreviewController.class).toUriString();
+        if (pathArray.length > 1) {
+            // 多图片预览
+            fileName = "多图预览.jpg";
+            List<String> imageUrls = new ArrayList<>();
+            for (String pathItem : pathArray) {
+                String encPathItem = java.util.Base64.getUrlEncoder().encodeToString(pathItem.getBytes(StandardCharsets.UTF_8));
+                String previewUrl = String.format("%spreview/%s", baseUri, encPathItem);
+                imageUrls.add(previewUrl);
+            }
+            model.addAttribute("imgUrls", imageUrls);
+        } else {
+            File file = new File(localPath);
+            // 检测路径是否合法
+            if (!file.isAbsolute() || !file.exists()) {
+                logger.info("无法处理的路径：{}", localPath);
+                String errorMsg = String.format(BASE64_DECODE_ERROR_MSG, "url");
+                return otherFilePreview.notSupportedFile(model, errorMsg);
+            }
+            fileName = file.getName();
+        }
+
+        String previewUrl = String.format("%spreview/%s", baseUri, path + "?fullfilename=" + fileName);
+        logger.info("正在预览本地文件: {}", localPath);
+        model.addAttribute("local", true);
+        model.addAttribute("localPath", localPath);
+        model.addAttribute("encodedLocalPath", encPath);
+        return onlinePreview(previewUrl, model, req);
+    }
+
+    @GetMapping(value = "/preview/{path}")
+    public ResponseEntity<?> preview(@PathVariable String path) {
+        String encPath = FilenameUtils.getBaseName(path);
+        String localPath = new String(java.util.Base64.getUrlDecoder().decode(encPath), StandardCharsets.UTF_8);
+        File file = new File(localPath);
+        // 检测路径是否合法
+        if (!file.isAbsolute() || !file.exists()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_OCTET_STREAM_VALUE)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename="
+                        + "\""
+                        + new String(file.getName().getBytes(), StandardCharsets.ISO_8859_1)
+                        + "\"")
+                .body(new FileSystemResource(file));
     }
 
     @GetMapping( "/onlinePreview")
