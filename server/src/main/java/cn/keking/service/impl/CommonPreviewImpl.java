@@ -45,4 +45,8 @@ public class CommonPreviewImpl implements FilePreview {
         }
         return null;
     }
+
+    public OtherFilePreviewImpl getOtherFilePreview() {
+        return otherFilePreview;
+    }
 }
