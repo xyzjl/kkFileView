@@ -57,8 +57,8 @@
      try{
     imageData = ctx.createImageData(canvas.width, canvas.height);
 } catch(e){
-  if (e.message.indexOf("CanvasRenderingContext2D")) 
-{ 
+  if (e.message.indexOf("CanvasRenderingContext2D"))
+{
        var imgObjj = new Image();
              imgObjj.src = url;
              myp.appendChild(imgObjj);
@@ -105,7 +105,6 @@ html += "    <span>";
 html += "        该(tif)文件，系统解析错误，具体原因如下：";
 html += "        <p style=\"color: red;\">文件[${file.name}]解析失败，请联系系统管理员</p>";
 html += "    </span>";
-html += "    <p>有任何疑问，请加入kk开源社区知识星球咨询：<a href=\"https://t.zsxq.com/09ZHSXbsQ\">https://t.zsxq.com/09ZHSXbsQ</a><br></p>";
 html += "</div>";
 html += "</body>";
 html += "</html>";

@@ -1,6 +1,6 @@
 package cn.keking.local;
 
-import com.ztzy.ztool.utils.PathUtils;
+import cn.keking.utils.PathUtils;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.beans.factory.annotation.Value;

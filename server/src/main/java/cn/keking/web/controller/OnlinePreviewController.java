@@ -112,7 +112,12 @@ public class OnlinePreviewController {
         model.addAttribute("local", true);
         model.addAttribute("localPath", localPath);
         model.addAttribute("encodedLocalPath", encPath);
-        return onlinePreview(previewUrl, model, req);
+
+        FileAttribute fileAttribute = fileHandlerService.getFileAttribute(previewUrl, req);
+        model.addAttribute("file", fileAttribute);
+        FilePreview filePreview = previewFactory.get(fileAttribute);
+        logger.info("预览文件url：{}，previewType：{}", previewUrl, fileAttribute.getType());
+        return filePreview.filePreviewHandle(previewUrl, model, fileAttribute);
     }
 
     @GetMapping(value = "/preview/{path}")

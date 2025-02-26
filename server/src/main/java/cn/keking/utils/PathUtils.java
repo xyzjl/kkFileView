@@ -11,6 +11,35 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 public class PathUtils {
+    public static String concat(String... paths) {
+
+        // 将所有\处理为/
+        for (int i = 0; i < paths.length; i++) {
+            String path = paths[i];
+            if (path == null) {
+                throw new IllegalArgumentException("路径不能为null");
+            }
+            paths[i] = path.replaceAll("\\\\", "/");
+        }
+        StringBuilder sb = new StringBuilder(paths[0]);
+        for (int i = 1; i < paths.length; i++) {
+            String curPath = paths[i];
+            boolean hasLeftSlash = false;
+            if (sb.length() > 0) {
+                hasLeftSlash = sb.charAt(sb.length() - 1) == '/';
+            }
+            boolean hasRightSlash = curPath.startsWith("/");
+            if (hasLeftSlash && hasRightSlash) {
+                sb.append(curPath.substring(1));
+            } else if (!hasLeftSlash && !hasRightSlash) {
+                sb.append('/').append(curPath);
+            } else {
+                sb.append(curPath);
+            }
+        }
+        return sb.toString();
+    }
+
     public static String encode(String path) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             try (GZIPOutputStream gzipOs = new GZIPOutputStream(out)) {

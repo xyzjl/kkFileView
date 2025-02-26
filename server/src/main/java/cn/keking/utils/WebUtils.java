@@ -1,16 +1,20 @@
 package cn.keking.utils;
 
+import cn.keking.web.controller.OnlinePreviewController;
 import io.mola.galimatias.GalimatiasParseException;
+import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.Base64Utils;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.MvcUriComponentsBuilder;
 import org.springframework.web.util.HtmlUtils;
 
 import javax.servlet.ServletRequest;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
+import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -231,22 +235,38 @@ public class WebUtils {
      */
     public static String getSourceUrl(ServletRequest request) {
         String url = request.getParameter("url");
-        String urls = request.getParameter("urls");
-        String currentUrl = request.getParameter("currentUrl");
-        String urlPath = request.getParameter("urlPath");
         if (StringUtils.isNotBlank(url)) {
             return decodeUrl(url);
         }
+
+        String currentUrl = request.getParameter("currentUrl");
         if (StringUtils.isNotBlank(currentUrl)) {
             return decodeUrl(currentUrl);
         }
+
+        String urlPath = request.getParameter("urlPath");
         if (StringUtils.isNotBlank(urlPath)) {
             return decodeUrl(urlPath);
         }
+
+        String urls = request.getParameter("urls");
         if (StringUtils.isNotBlank(urls)) {
             urls = decodeUrl(urls);
             String[] images = urls.split("\\|");
             return images[0];
+        }
+
+        // 本地绝对路径预览
+        String path = request.getParameter("path");
+        if (StringUtils.isNotBlank(path)) {
+            String encPath = FilenameUtils.getBaseName(path);
+            String localPath = new String(java.util.Base64.getUrlDecoder().decode(encPath), StandardCharsets.UTF_8);
+            String[] pathArray = localPath.split(";");
+            localPath = pathArray[0];
+            File file = new File(localPath);
+            String fileName = file.getName();
+            String baseUri = MvcUriComponentsBuilder.fromController(OnlinePreviewController.class).toUriString();
+            return String.format("%spreview/%s", baseUri, path + "?fullfilename=" + fileName);
         }
         return null;
     }
