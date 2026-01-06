@@ -1,6 +1,7 @@
 package cn.keking.web.controller;
 
 import cn.keking.model.FileAttribute;
+import cn.keking.model.FileType;
 import cn.keking.service.FileHandlerService;
 import cn.keking.service.FilePreview;
 import cn.keking.service.FilePreviewFactory;
@@ -37,6 +38,10 @@ import org.springframework.web.servlet.mvc.method.annotation.MvcUriComponentsBui
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -46,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import javax.imageio.ImageIO;
 
 import static cn.keking.service.FilePreview.PICTURE_FILE_PREVIEW_PAGE;
 
@@ -136,6 +142,62 @@ public class OnlinePreviewController {
                         + new String(file.getName().getBytes(), StandardCharsets.ISO_8859_1)
                         + "\"")
                 .body(new FileSystemResource(file));
+    }
+
+    @GetMapping("/thumbnail")
+    public ResponseEntity<?> thumbnail(@RequestParam String path) {
+        String encPath = FilenameUtils.getBaseName(path);
+        String localPath = new String(java.util.Base64.getUrlDecoder().decode(encPath), StandardCharsets.UTF_8);
+        String[] pathArray = localPath.split(";");
+        if (pathArray.length > 1) {
+            return ResponseEntity.badRequest().build();
+        }
+        File file = new File(localPath);
+        if (!file.isAbsolute() || !file.exists()) {
+            return ResponseEntity.notFound().build();
+        }
+        if (FileType.typeFromFileName(file.getName()) != FileType.PICTURE) {
+            return ResponseEntity.status(415).build();
+        }
+        BufferedImage sourceImage;
+        try {
+            sourceImage = ImageIO.read(file);
+        } catch (IOException e) {
+            logger.error("读取图片缩略图失败：{}", localPath, e);
+            return ResponseEntity.status(500).build();
+        }
+        if (sourceImage == null) {
+            return ResponseEntity.status(415).build();
+        }
+        int maxSize = 200;
+        int sourceWidth = sourceImage.getWidth();
+        int sourceHeight = sourceImage.getHeight();
+        double scale = Math.min((double) maxSize / sourceWidth, (double) maxSize / sourceHeight);
+        if (scale > 1) {
+            scale = 1;
+        }
+        int targetWidth = Math.max(1, (int) Math.round(sourceWidth * scale));
+        int targetHeight = Math.max(1, (int) Math.round(sourceHeight * scale));
+        boolean hasAlpha = sourceImage.getColorModel().hasAlpha();
+        int imageType = hasAlpha ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB;
+        BufferedImage thumbnailImage = new BufferedImage(targetWidth, targetHeight, imageType);
+        Graphics2D graphics = thumbnailImage.createGraphics();
+        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        graphics.drawImage(sourceImage, 0, 0, targetWidth, targetHeight, null);
+        graphics.dispose();
+        String formatName = hasAlpha ? "png" : "jpg";
+        MediaType mediaType = hasAlpha ? MediaType.IMAGE_PNG : MediaType.IMAGE_JPEG;
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            ImageIO.write(thumbnailImage, formatName, outputStream);
+            return ResponseEntity.ok()
+                    .contentType(mediaType)
+                    .body(outputStream.toByteArray());
+        } catch (IOException e) {
+            logger.error("输出缩略图失败：{}", localPath, e);
+            return ResponseEntity.status(500).build();
+        }
     }
 
     @GetMapping( "/onlinePreview")
