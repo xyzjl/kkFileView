@@ -7,6 +7,7 @@ import cn.keking.service.FilePreviewFactory;
 import cn.keking.service.cache.CacheService;
 import cn.keking.service.impl.OtherFilePreviewImpl;
 import cn.keking.utils.KkFileUtils;
+import cn.keking.utils.PathUtils;
 import cn.keking.utils.WebUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fr.opensagres.xdocreport.core.io.IOUtils;
@@ -17,6 +18,7 @@ import org.apache.http.impl.client.DefaultRedirectStrategy;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.web.ServerProperties;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -33,7 +35,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.client.RequestCallback;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.servlet.mvc.method.annotation.MvcUriComponentsBuilder;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -58,6 +59,8 @@ public class OnlinePreviewController {
     public static final String BASE64_DECODE_ERROR_MSG = "Base64解码失败，请检查你的 %s 是否采用 Base64 + urlEncode 双重编码了！";
     private final Logger logger = LoggerFactory.getLogger(OnlinePreviewController.class);
 
+    private static final String LOCAL_FILE_PREVIEW_PREFIX = "/lfp";
+
     private final FilePreviewFactory previewFactory;
     private final CacheService cacheService;
     private final FileHandlerService fileHandlerService;
@@ -65,12 +68,14 @@ public class OnlinePreviewController {
     private static final RestTemplate restTemplate = new RestTemplate();
     private static  final HttpComponentsClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory();
     private static final ObjectMapper mapper = new ObjectMapper();
+    private final ServerProperties serverProperties;
 
-    public OnlinePreviewController(FilePreviewFactory filePreviewFactory, FileHandlerService fileHandlerService, CacheService cacheService, OtherFilePreviewImpl otherFilePreview) {
+    public OnlinePreviewController(FilePreviewFactory filePreviewFactory, FileHandlerService fileHandlerService, CacheService cacheService, OtherFilePreviewImpl otherFilePreview, ServerProperties serverProperties) {
         this.previewFactory = filePreviewFactory;
         this.fileHandlerService = fileHandlerService;
         this.cacheService = cacheService;
         this.otherFilePreview = otherFilePreview;
+        this.serverProperties = serverProperties;
     }
 
     /**
@@ -85,14 +90,14 @@ public class OnlinePreviewController {
         String localPath = new String(java.util.Base64.getUrlDecoder().decode(encPath), StandardCharsets.UTF_8);
         String[] pathArray = localPath.split(";");
         String fileName;
-        String baseUri = MvcUriComponentsBuilder.fromController(OnlinePreviewController.class).toUriString();
+        String contextPath = serverProperties.getServlet().getContextPath();
         if (pathArray.length > 1) {
             // 多图片预览
             fileName = "多图预览.jpg";
             List<String> imageUrls = new ArrayList<>();
             for (String pathItem : pathArray) {
                 String encPathItem = java.util.Base64.getUrlEncoder().encodeToString(pathItem.getBytes(StandardCharsets.UTF_8));
-                String previewUrl = String.format("%spreview/%s", baseUri, encPathItem);
+                String previewUrl = PathUtils.concat(contextPath, LOCAL_FILE_PREVIEW_PREFIX, encPathItem);
                 imageUrls.add(previewUrl);
             }
             model.addAttribute("imgUrls", imageUrls);
@@ -107,7 +112,7 @@ public class OnlinePreviewController {
             fileName = file.getName();
         }
 
-        String previewUrl = String.format("%spreview/%s", baseUri, path + "?fullfilename=" + fileName);
+        String previewUrl = PathUtils.concat(contextPath, LOCAL_FILE_PREVIEW_PREFIX, path + "?fullfilename=" + fileName);
         logger.info("正在预览本地文件: {}", localPath);
         model.addAttribute("local", true);
         model.addAttribute("localPath", localPath);
@@ -120,8 +125,8 @@ public class OnlinePreviewController {
         return filePreview.filePreviewHandle(previewUrl, model, fileAttribute);
     }
 
-    @GetMapping(value = "/preview/{path}")
-    public ResponseEntity<?> preview(@PathVariable String path) {
+    @GetMapping(value = "/" + LOCAL_FILE_PREVIEW_PREFIX + "/{path}")
+    public ResponseEntity<?> localFilePreview(@PathVariable String path) {
         String encPath = FilenameUtils.getBaseName(path);
         String localPath = new String(java.util.Base64.getUrlDecoder().decode(encPath), StandardCharsets.UTF_8);
         File file = new File(localPath);
